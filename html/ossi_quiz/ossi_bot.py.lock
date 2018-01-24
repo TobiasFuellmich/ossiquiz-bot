@@ -1,0 +1,169 @@
+import requests
+import time
+import sys
+import os.path
+
+if os.path.isfile("ossi_stat")==False:
+	file = open("ossi_quiz/ossi_stat.lock", "w") 
+	file.write("0")
+	file.close()
+
+file = open("ossi_quiz/ossi_stat.lock", "r") 
+stat=file.readline()
+file.close()
+if stat!="1":
+	file = open("ossi_quiz/ossi_stat.lock", "w") 
+	file.write("1")
+	file.close()
+	mail=""
+	issave_score=False
+	if len(sys.argv)==3:
+		name =sys.argv[1]
+		wohnort=sys.argv[2]
+		issave_score=True
+	
+	#while True:
+	#ime.sleep(5)
+	isstored=False
+	store_finished=True
+	isfirst=True
+	isrunning=True
+	r = requests.post("http://www.ossiquiz.de/ossiquiz.php", data={'button': 'Spiel beginnen'})
+	
+	while isrunning==True:
+		pla_answ=1
+		r_text=r.text
+		r_text=r_text.encode('ascii', 'ignore')
+		pos1=r_text.find("Erreichte Punktzahl: </font><b><font face='Arial' size=2 color='#66FF33'>")
+		if pos1==-1:
+			#hash
+			pos1=r_text.find("<input type=hidden name='window' value=")
+			pos1=r_text.find("value=",pos1)
+			pos1+=6
+			pos2=r_text.find(">",pos1)
+			hash=r_text[pos1:pos2]
+			if r_text.find("Die Antwort ist leider falsch. Richtig w&auml;re Antwort") == -1:
+				if isfirst==False and isstored == False and store_finished == False:
+					file = open("ossi_quiz/ossi_data.lock", "a") 
+					file.write('1\n')
+					file.close()
+				if isfirst==False and store_finished == False:
+					sys.stdout.write("<div class='r'></div><br><hr>endl!?!\n")
+				isstored=False
+				store_finished=True
+				#get data
+				#question
+				pos1=r_text.find("<font face='Arial' size=2 color='#66FFFF'>")
+				pos1=r_text.find(">",pos1)
+				pos1+=1
+				pos2=r_text.find("</font>",pos1)
+				question=r_text[pos1:pos2]
+				#answer1
+				pos1=r_text.find('<span onmouseout="this.style.color='+"'"+'#FFFFFF'+"'"+';" onmouseover="this.style.color='+"'"+'33FF33'+"'"+';" class="lab">')
+				pos1=r_text.find(">",pos1)
+				pos1+=1
+				pos2=r_text.find("</span>",pos1)
+				answ1=r_text[pos1:pos2]
+				#answer2
+				pos1=r_text.find('<span onmouseout="this.style.color='+"'"+'#FFFFFF'+"'"+';" onmouseover="this.style.color='+"'"+'33FF33'+"'"+';" class="lab">',pos2)
+				pos1=r_text.find(">",pos1)
+				pos1+=1
+				pos2=r_text.find("</span>",pos1)
+				answ2=r_text[pos1:pos2]
+				#answer3
+				pos1=r_text.find('<span onmouseout="this.style.color='+"'"+'#FFFFFF'+"'"+';" onmouseover="this.style.color='+"'"+'33FF33'+"'"+';" class="lab">',pos2)
+				pos1=r_text.find(">",pos1)
+				pos1+=1
+				pos2=r_text.find("</span>",pos1)
+				answ3=r_text[pos1:pos2]
+				#pic src
+				pos1=r_text.find('<td width=220 valign=top align=middle rowspan=4 height=200><img border=0 src="')
+				pos1=r_text.find('src="',pos1)
+				pos1+=5
+				pos2=r_text.find('">',pos1)
+				pic_src=r_text[pos1:pos2]
+				id=question+"   ->   "+answ1+"/"+answ2+"/"+answ3+"/"+pic_src+"="
+				#test if stored
+				file = open("ossi_quiz/ossi_data.lock", "r") 
+				for line in file: 
+					pos1=line.find(id)
+					if pos1 != -1:
+						isstored=True
+						pla_answ=int(line[-2])
+						print("S:")
+						break
+				
+				file.close()
+				if isstored == False:
+					file = open("ossi_quiz/ossi_data.lock", "a") 
+					file.write(id)
+					file.close()
+				guess=""
+				if pla_answ==1: answ1="<span style='background:orange'>"+answ1+"</span>"
+				
+				if pla_answ==2: answ2="<span style='background:orange'>"+answ2+"</span>"
+				
+				if pla_answ==3: answ3="<span style='background:orange'>"+answ3+"</span>"
+				
+				sys.stdout.write("<span style='background:#333333'>Frage:</span> "+question+" <span style='background:#333333'>Antworten:</span> "+answ1+"/"+answ2+"/"+answ3)
+				r = requests.post("http://www.ossiquiz.de/ossiquiz.php", data={'window': hash, 'playerantwort': pla_answ, 'button': 'Antwort abschicken'})
+				store_finished=False
+			else:
+				#solution
+				pos1=r_text.find("3>Die Antwort ist leider falsch. Richtig w&auml;re Antwort ")
+				pos1=r_text.find("re Antwort ",pos1)
+				pos1+=11
+				pos2=r_text.find(".",pos1)
+				sol=r_text[pos1:pos2]
+				if sol=='A': sol_int=1
+				
+				if sol=='B': sol_int=2
+				
+				if sol=='C': sol_int=3
+				
+				sys.stdout.write(str(sol_int)+"<div class='w'></div><br><hr>endl!?!\n")
+				file = open("ossi_quiz/ossi_data.lock", "a") 
+				file.write(str(sol_int)+'\n')
+				file.close()
+				r = requests.post("http://www.ossiquiz.de/ossiquiz.php", data={'window': hash, 'button': 'Weiter spielen'})
+				store_finished=True
+		else:
+			isrunning=False
+			pos1=r_text.find("33'>",pos1)
+			pos1+=4
+			pos2=r_text.find("<",pos1)
+			punkte=r_text[pos1:pos2]
+			#hash
+			pos1=r_text.find('<input type=hidden name="window" value="')
+			pos1=r_text.find('value="',pos1)
+			pos1+=7
+			pos2=r_text.find('">',pos1)
+			hash=r_text[pos1:pos2]
+			if r_text.find("Dein Name:") != -1:
+				sys.stdout.write("<br><hr>endl!?!\nPunktzahl: "+punkte+"<br><hr>")
+				if issave_score:
+					r = requests.post("http://www.ossiquiz.de/ossiquiz.php", data={'window': hash, 'name': name, 'wohnort': wohnort, 'button': 'Eintrag vornehmen'})
+			else:
+				sys.stdout.write("<div class='r'></div><br><hr>endl!?!\nPunktzahl: "+punkte+"<br><hr>")
+				r = requests.post("http://www.ossiquiz.de/ossiquiz.php", data={'window': hash, 'button': 'Urkunde annehmen'})
+				r_text=r.text
+				r_text=r_text.encode('ascii', 'ignore')
+				#hash
+				pos1=r_text.find('<input type=hidden name="window" value="')
+				pos1=r_text.find('value="',pos1)
+				pos1+=7
+				pos2=r_text.find('">',pos1)
+				hash=r_text[pos1:pos2]
+				if issave_score:
+					r = requests.post("http://www.ossiquiz.de/ossiquiz.php", data={'window': hash, 'name': name, 'email': mail, 'wohnort': wohnort, 'button': 'Eintrag vornehmen'})
+		
+		isfirst=False
+	file = open("ossi_quiz/ossi_stat.lock", "w") 
+	file.write("0")
+	file.close()
+
+#Erreichte Punktzahl: </font><b><font face='Arial' size=2 color='#66FF33'>
+
+#file = open("r_text", "w") 
+#file.write(r_text)
+#file.close()
